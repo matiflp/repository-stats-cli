@@ -61,6 +61,9 @@ python repo_stats.py --help
   eligible repository in the requested order. Dashboard, plain text, and JSON
   use the same selection and order.
 
+The dashboard header and plain-text report show the selected ordering. In star
+mode, the label also explains how ties are resolved; JSON records it in `sort`.
+
 GitHub's user-repository endpoint does not support sorting by stars, so that mode
 fetches every repository-list page before sorting locally. Detailed issue, PR,
 watcher, and commit requests are only made for the selected repositories.
@@ -72,6 +75,7 @@ watcher, and commit requests are only made for the selected repositories.
 │                                                                              │
 │  REPOSITORY STATS                                                            │
 │  @octocat  /  public repositories                                            │
+│  Sorted by: latest push first                                                │
 │                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭───────────────╮    ╭───────────────╮    ╭───────────────╮   ╭───────────────╮
