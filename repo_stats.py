@@ -296,9 +296,18 @@ def repository_detail_lines(repo):
     ]
 
 
+def sort_description(report):
+    labels = {
+        "pushed": "latest push first",
+        "stars": "most stars first (ties: name A-Z)",
+    }
+    return f"Sorted by: {labels[report['sort']]}"
+
+
 def print_table(report):
     repos = report["repositories"]
     print(f"Repository Stats — {report['user']}")
+    print(sort_description(report))
     print(f"{len(repos)} public repositories shown; {report['total_stars']} stars across these repositories.\n")
     if not repos:
         print("No public repositories match the selection.")
@@ -364,6 +373,7 @@ def print_dashboard(report, console):
     heading = Text("REPOSITORY STATS", style="bold bright_cyan")
     heading.append(f"\n@{report['user']}", style="bold")
     heading.append("  /  public repositories", style="dim")
+    heading.append(f"\n{sort_description(report)}", style="dim")
     console.print(Panel(heading, border_style="cyan", padding=(1, 2)))
 
     metrics = [

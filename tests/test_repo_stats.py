@@ -32,7 +32,7 @@ def stats_repository(**overrides):
 
 
 def report_for(repos):
-    return {"user": "octocat", "total_stars": sum(repo["stars"] for repo in repos),
+    return {"user": "octocat", "sort": "pushed", "total_stars": sum(repo["stars"] for repo in repos),
             "repositories": repos, "fetched_at": "2026-11-13", **app.summarize_stats(repos)}
 
 
