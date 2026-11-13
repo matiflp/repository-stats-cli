@@ -103,16 +103,19 @@ class GitHubClient:
             params = None
 
 
-def list_repositories(client, username, limit, include_forks):
+def list_repositories(client, username, limit, include_forks, sort="pushed"):
     params = {"type": "owner", "sort": "pushed", "direction": "desc", "per_page": 100}
     selected = []
     for repo in client.items(f"/users/{quote(username, safe='')}/repos", params):
         if repo["private"] or (repo["fork"] and not include_forks):
             continue
         selected.append(repo)
-        if limit and len(selected) >= limit:
+        if sort == "pushed" and limit and len(selected) >= limit:
             break
-    return selected
+    if sort == "stars":
+        # This endpoint cannot sort by stars. Rank all eligible pages before limiting.
+        selected.sort(key=lambda repo: (-repo["stargazers_count"], repo["full_name"].casefold()))
+    return selected[:limit] if limit else selected
 
 
 def issue_counts(client, repo):
@@ -461,7 +464,9 @@ def parse_args(argv=None):
     )
     parser.add_argument("--username", "-u", "--user", required=True,
                         help="GitHub account to query (required; --user is also accepted)")
-    parser.add_argument("--limit", type=int, default=5, help="repositories to show, sorted by last push; 0 = all (default: 5)")
+    parser.add_argument("--sort", choices=("pushed", "stars"), default="pushed",
+                        help="order by latest push or most stars, descending (default: pushed)")
+    parser.add_argument("--limit", type=int, default=5, help="repositories to show after sorting; 0 = all (default: 5)")
     parser.add_argument("--commits", type=int, default=3, help="recent commits per repository, 1–100 (default: 3)")
     parser.add_argument("--include-forks", action="store_true", help="include forks owned by the user")
     output = parser.add_mutually_exclusive_group()
@@ -488,13 +493,14 @@ def main(argv=None):
         console = None if args.json or args.plain else create_console(args.color)
         status = console.status(f"Fetching repositories and activity for @{args.username}...", spinner="dots") if console and console.is_terminal else nullcontext()
         with status:
-            repos = list_repositories(client, args.username, args.limit, args.include_forks)
+            repos = list_repositories(client, args.username, args.limit, args.include_forks, args.sort)
             stats = collect_stats(client, repos, args.commits)
     except GitHubError as exc:
         print(f"Error: {single_line(exc)}", file=sys.stderr)
         return 1
     report = {
         "user": args.username,
+        "sort": args.sort,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "repository_count": len(stats),
         "total_stars": sum(repo["stars"] for repo in stats),

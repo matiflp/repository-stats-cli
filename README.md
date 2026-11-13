@@ -34,6 +34,9 @@ python repo_stats.py --username matiflp --limit 2 --commits 2
 # Short username option
 python repo_stats.py -u matiflp
 
+# Show the five public repositories with the most stars
+python repo_stats.py --username matiflp --sort stars --limit 5
+
 # Include forks and all public repositories owned by the user
 python repo_stats.py --username matiflp --limit 0 --include-forks
 
@@ -47,6 +50,20 @@ python repo_stats.py --username matiflp --color never
 # Full usage
 python repo_stats.py --help
 ```
+
+### Repository ordering
+
+- **`--sort pushed` (default):** latest push first, in GitHub's returned order.
+- **`--sort stars`:** most stars first; ties are ordered by full repository name
+  alphabetically, ignoring case. All eligible public repositories are considered,
+  including those on later API pages, before `--limit` is applied.
+- Forks are excluded unless `--include-forks` is set. `--limit 0` keeps every
+  eligible repository in the requested order. Dashboard, plain text, and JSON
+  use the same selection and order.
+
+GitHub's user-repository endpoint does not support sorting by stars, so that mode
+fetches every repository-list page before sorting locally. Detailed issue, PR,
+watcher, and commit requests are only made for the selected repositories.
 
 ### Example output (illustrative excerpt)
 
@@ -197,7 +214,7 @@ performs `GET` requests. Pagination and redirects are restricted to
 - `130`: interrupted with Ctrl+C.
 
 With `--json`, stdout contains only the report; diagnostics go to stderr. The
-report has `user`, `fetched_at`, `repository_count`, `total_stars`, `totals`,
+report has `user`, `sort`, `fetched_at`, `repository_count`, `total_stars`, `totals`,
 `incomplete_totals`, and `repositories`.
 
 - `totals` includes `stars`, `forks`, `watchers`, `open_issues`, `closed_issues`,
@@ -206,6 +223,8 @@ report has `user`, `fetched_at`, `repository_count`, `total_stars`, `totals`,
   `disabled_repositories`.
 - `incomplete_totals` lists keys whose totals omit unavailable counts. Their
   numeric values are lower bounds, corresponding to the dashboard's `+` marker.
+- `sort` records the requested ordering (`pushed` or `stars`). The `repositories`
+  array is already ordered and limited accordingly.
 - Each repository includes stars, forks, watchers, metadata, `issues_enabled`,
   `issues: {open, closed, total}`, `pull_requests: {open, closed, merged, draft,
   total}`, `commits`, and `warnings`. `open_issues` is retained as an alias of
@@ -227,9 +246,9 @@ python -m unittest discover -s tests -v
 Run tests in the virtual environment with dependencies installed. Tests are
 offline and use fake responses. They cover pagination, issue/PR classification,
 drafts, disabled trackers, real watcher semantics, incomplete totals, empty
-repositories, partial failures, rate limits, authentication, token-safe request
-destinations, username selection, output modes, and dashboard rendering with
-Unicode, narrow terminals, and literal markup. The included GitHub Actions
+repositories, sorting before limiting across pages, partial failures, rate limits,
+authentication, token-safe request destinations, username selection, output modes,
+and dashboard rendering with Unicode, narrow terminals, and literal markup. The included GitHub Actions
 workflow will install dependencies and run them after the repository is published.
 
 ## GitHub Developer Program
