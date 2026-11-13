@@ -56,6 +56,59 @@ class RepositoryStatsTests(unittest.TestCase):
         client.get = Mock(return_value=([repository("fork", fork=True), repository("own")], {}))
         self.assertEqual(len(app.list_repositories(client, "matiflp", 0, True)), 2)
 
+    def test_star_sort_finds_top_repositories_across_pages_before_limiting(self):
+        client = app.GitHubClient()
+        client.get = Mock(side_effect=[
+            ([repository("recent", stargazers_count=1),
+              repository("popular-fork", fork=True, stargazers_count=1000),
+              repository("private", private=True, stargazers_count=2000)],
+             {"Link": '<https://api.github.com/users/matiflp/repos?page=2>; rel="next"'}),
+            ([repository("popular", stargazers_count=50), repository("other", stargazers_count=10)], {}),
+        ])
+        repos = app.list_repositories(client, "matiflp", 2, False, "stars")
+        self.assertEqual([repo["full_name"] for repo in repos], ["matiflp/popular", "matiflp/other"])
+        self.assertEqual(client.get.call_count, 2)
+        self.assertEqual(client.get.call_args_list[0].args[1]["sort"], "pushed")
+
+    def test_star_sort_zero_limit_includes_forks_and_breaks_ties_by_name(self):
+        client = app.GitHubClient()
+        client.get = Mock(return_value=([
+            repository("Zulu", stargazers_count=5),
+            repository("alpha", stargazers_count=5),
+            repository("fork", fork=True, stargazers_count=20),
+            repository("private", private=True, stargazers_count=100),
+        ], {}))
+        repos = app.list_repositories(client, "matiflp", 0, True, "stars")
+        self.assertEqual([repo["full_name"] for repo in repos], ["matiflp/fork", "matiflp/alpha", "matiflp/Zulu"])
+
+    def test_pushed_sort_stops_at_limit_and_preserves_api_order(self):
+        client = app.GitHubClient()
+        client.get = Mock(return_value=([
+            repository("recent", stargazers_count=0), repository("older", stargazers_count=100),
+        ], {"Link": '<https://api.github.com/users/matiflp/repos?page=2>; rel="next"'}))
+        repos = app.list_repositories(client, "matiflp", 1, False)
+        self.assertEqual([repo["full_name"] for repo in repos], ["matiflp/recent"])
+        self.assertEqual(client.get.call_count, 1)
+
+    def test_star_sort_page_failure_does_not_return_a_misleading_top_list(self):
+        client = app.GitHubClient()
+        client.get = Mock(side_effect=[
+            ([repository()], {"Link": '<https://api.github.com/users/matiflp/repos?page=2>; rel="next"'}),
+            app.GitHubError("Repository listing unavailable", 503),
+        ])
+        with self.assertRaisesRegex(app.GitHubError, "listing unavailable"):
+            app.list_repositories(client, "matiflp", 1, False, "stars")
+
+    def test_sort_option_reaches_selection_and_json_report(self):
+        for options, expected in [([], "pushed"), (["--sort", "stars"], "stars")]:
+            output = io.StringIO()
+            with self.subTest(sort=expected), patch.object(app, "list_repositories", return_value=[]) as fetch, \
+                 contextlib.redirect_stdout(output):
+                code = app.main(["-u", "octocat", "--json", *options])
+            self.assertEqual(code, 0)
+            self.assertEqual(fetch.call_args.args[4], expected)
+            self.assertEqual(json.loads(output.getvalue())["sort"], expected)
+
     def test_issue_count_excludes_pull_requests_on_every_page(self):
         client = app.GitHubClient()
         client.get = Mock(side_effect=[
@@ -294,7 +347,7 @@ class RepositoryStatsTests(unittest.TestCase):
     def test_invalid_arguments_fail_before_network_access(self):
         for args in [["-u", "octocat", "--limit", "-1"], ["-u", "octocat", "--commits", "0"],
                      ["-u", "octocat", "--commits", "101"], ["--username", "../other"],
-                     ["-u", "octocat", "--plain", "--json"]]:
+                     ["-u", "octocat", "--plain", "--json"], ["-u", "octocat", "--sort", "invalid"]]:
             with self.subTest(args=args), patch.object(app, "GitHubClient") as client, \
                  contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
                 app.main(args)
